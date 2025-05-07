@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>📷 Smart Ingredient Scanner</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f2f2f2;
+      text-align: center;
+      padding: 20px;
+    }
+    video, canvas {
+      width: 90%;
+      max-width: 400px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      border: 2px solid #444;
+    }
+    #scanBtn {
+      padding: 12px 24px;
+      font-size: 18px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    #scanBtn:hover {
+      background-color: #0056b3;
+    }
+    #scanStatus {
+      font-size: 18px;
+      margin-top: 15px;
+      font-weight: bold;
+      color: #007bff;
+      animation: blink 1s infinite;
+      display: none;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    #result {
+      margin-top: 20px;
+      background: white;
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      text-align: left;
+      white-space: pre-line;
+    }
+    .bad { color: red; font-weight: bold; }
+    .good { color: green; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <h1>📷 Smart Ingredient Scanner</h1>
+  <p>Scan ingredients from food, sunscreen, shampoo, moisturizer, chocolate & more!</p>
+
+  <video id="video" autoplay playsinline></video><br>
+  <button id="scanBtn" onclick="capture()">📸 Scan Ingredients</button>
+  <div id="scanStatus">🔍 Scanning...</div>
+  <canvas id="canvas" style="display:none;"></canvas>
+
+  <div id="result">Waiting for scan...</div>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const result = document.getElementById('result');
+    const scanStatus = document.getElementById('scanStatus');
+
+    // Request front (selfie) camera access
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
+      .then(stream => {
+        video.srcObject = stream;
+      })
+      .catch(err => {
+        alert("Camera access denied. Please allow camera permissions.");
+        console.error(err);
+      });
+
+    const badIngredientsFood = [
+      "high fructose corn syrup", "msg", "monosodium glutamate",
+      "sodium nitrite", "aspartame", "trans fat", "hydrogenated oil",
+      "artificial flavor", "artificial sweetener", "artificial color",
+      "bht", "bpa", "preservative"
+    ];
+
+    const badIngredientsCosmetic = [
+      "sodium lauryl sulfate", "sodium laureth sulfate", "paraben",
+      "dmdm hydantoin", "methylisothiazolinone", "phenoxyethanol",
+      "mineral oil", "petrolatum", "fragrance", "formaldehyde",
+      "triclosan", "siloxane", "phthalate", "oxybenzone",
+      "ci 42090", "ci 14720", "ci 20285", "colorant", "artificial dye"
+    ];
+
+    function capture() {
+      result.textContent = "";
+      scanStatus.style.display = 'block';
+
+      // Draw video frame to canvas
+      const ctx = canvas.getContext('2d');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Use Tesseract.js to extract text
+      Tesseract.recognize(canvas, 'eng', { logger: m => console.log(m) })
+        .then(({ data: { text } }) => {
+          scanStatus.style.display = 'none';
+          result.innerHTML = "📝 Extracted Text:\n" + text.trim() + "\n\n🔍 Analyzing...";
+
+          analyzeText(text.toLowerCase());
+        });
+    }
+
+    function analyzeText(text) {
+      const foodHints = ["calories", "sugar", "fat", "flavor", "protein"];
+      const cosmeticHints = ["shampoo", "spf", "face", "cream", "moisturizer", "skin"];
+
+      let type = "Unknown Product";
+      let badList = [];
+
+      const isFood = foodHints.some(hint => text.includes(hint));
+      const isCosmetic = cosmeticHints.some(hint => text.includes(hint));
+
+      if (isFood && !isCosmetic) {
+        type = "🍔 Food Product";
+        badList = badIngredientsFood;
+      } else if (isCosmetic && !isFood) {
+        type = "🧴 Cosmetic Product";
+        badList = badIngredientsCosmetic;
+      } else {
+        type = "🧪 Mixed or Unknown Product";
+        badList = badIngredientsFood.concat(badIngredientsCosmetic);
+      }
+
+      const detectedHarmful = badList.filter(item => text.includes(item));
+      if (detectedHarmful.length > 0) {
+        result.innerHTML += `\n\n⚠️ Product Type: ${type}\n🚨 <span class="bad">Harmful Ingredients Found:\n- ${detectedHarmful.join("\n- ")}</span>`;
+      } else {
+        result.innerHTML += `\n\n✅ Product Type: ${type}\n<span class="good">No harmful ingredients detected.</span>`;
+      }
+    }
+  </script>
+
+</body>
+</html>
